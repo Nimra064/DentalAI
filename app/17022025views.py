@@ -1,4 +1,3 @@
-
 import os
 import cv2
 import base64
@@ -8,7 +7,7 @@ from django.http import JsonResponse
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from app.models import UploadedImage
-from ultralytics import YOLO
+from ultralytics import YOLO  
 
 class ImageUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
@@ -19,15 +18,6 @@ class ImageUploadView(APIView):
             image_instance = UploadedImage.objects.create(image=uploaded_image)
             image_path = image_instance.image.path
             original_image = cv2.imread(image_path)
-
-            # Get file extension and adjust font size accordingly
-            file_extension = os.path.splitext(image_path)[1].lower()
-            if file_extension == '.png':
-                font_scale = 0.8  # Font size for PNG files
-                thickness_outline = 0  # Make text bold for visibility
-            else:
-                font_scale = 3  # Font size for other file types
-                thickness_outline = 3  # Make text bold for visibility
 
             # Load YOLO models
             model1 = YOLO('app/model/number.pt')  # Tooth Number Detection
@@ -46,6 +36,11 @@ class ImageUploadView(APIView):
                     x_min, y_min, x_max, y_max, conf1, label = map(int, box.tolist())
                     class_label = model1.names[label]  
                     tooth_number_map[(x_min, y_min, x_max, y_max)] = class_label  
+
+                    # Draw bounding box for tooth number
+                  #  cv2.rectangle(original_image, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                   # cv2.putText(original_image, f"{class_label}", (x_min, y_min - 10), 
+#                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
             # **Step 2: Run model2 (Tooth & Pulp Area Detection)**
             if results2 and results2[0].masks is not None:
@@ -86,23 +81,41 @@ class ImageUploadView(APIView):
                         t_label = f"t{tooth_counter}"  # Assign T1, T2, ...
                         tooth_counter += 1  
 
-                        # **Ensure Consistent Label Size & Visibility**
-                        
                         # **Fix: Center the Label Inside the Tooth**
                         center_x = int(np.mean(polygon2[:, 0]))  
                         center_y = int(np.mean(polygon2[:, 1]))  
 
-                        (text_width, text_height), _ = cv2.getTextSize(t_label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness_outline)
+                        (text_width, text_height), _ = cv2.getTextSize(t_label, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 5)
+
+                        # **Position Label at the Center of the Tooth**
                         label_x = center_x - text_width // 2
                         label_y = center_y + text_height // 2  
 
-                        # **Draw Black Outline for Visibility**
-                        cv2.putText(original_image, t_label, (label_x, label_y),  
-                                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness_outline + 2, cv2.LINE_AA)  
+                        # # Draw black outline for better readability
+                        # cv2.putText(original_image, t_label, 
+                        #             (label_x, label_y),  
+                        #             cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 0), 8, cv2.LINE_AA)  
 
-                        # **Draw Dark White Text on Top**
-                        cv2.putText(original_image, t_label, (label_x, label_y),  
-                                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness_outline, cv2.LINE_AA)
+                        # # Draw slightly darker white text on top (Light Gray)
+                        # cv2.putText(original_image, t_label, 
+                        #             (label_x, label_y),  
+                        #             cv2.FONT_HERSHEY_SIMPLEX, 3, (256, 256, 256), 5, cv2.LINE_AA)  
+  
+                        # Draw black outline for better readability
+                        cv2.putText(original_image, t_label, 
+                                    (label_x, label_y),  
+                                    cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 0), 10, cv2.LINE_AA)  
+
+                        # Draw light gray text slightly inside the black outline
+                        cv2.putText(original_image, t_label, 
+                                    (label_x, label_y),  
+                                    cv2.FONT_HERSHEY_SIMPLEX, 3, (200, 200, 200), 6, cv2.LINE_AA)  
+
+                        # Draw final white text on top
+                        cv2.putText(original_image, t_label, 
+                                    (label_x, label_y),  
+                                    cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 3, cv2.LINE_AA)  
+
 
                         detections.append({
                             "tooth_no": assigned_tooth_number,  
